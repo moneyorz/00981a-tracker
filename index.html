@@ -342,7 +342,7 @@
 
     function setupDates() {
       const dates = [...new Set(allRows.map((row) => row.date))].sort().reverse();
-      dateFilter.innerHTML = dates
+      dateFilter.innerHTML = `<option value="">全部日期</option>` + dates
         .map((date) => `<option value="${escapeHtml(date)}">${showDate(date)}</option>`)
         .join("");
     }
