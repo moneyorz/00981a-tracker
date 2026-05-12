@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>00981A 每日異動</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #fff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --head: #f3f4f6;
+      --blue: #2563eb;
+      --red: #dc2626;
+      --green: #059669;
+      --gray: #4b5563;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Microsoft JhengHei", "Noto Sans TC", Arial, sans-serif;
+      line-height: 1.5;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 28px 16px 40px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      letter-spacing: 0;
+    }
+
+    .source {
+      color: var(--muted);
+      font-size: 13px;
+      text-align: right;
+    }
+
+    .toolbar,
+    .summary,
+    .table-wrap {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 180px 160px 1fr auto;
+      gap: 10px;
+      align-items: end;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    .notice {
+      display: none;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 8px;
+      color: #92400e;
+      margin-bottom: 12px;
+      padding: 12px 14px;
+      font-size: 14px;
+    }
+
+    .notice input {
+      display: block;
+      width: 100%;
+      max-width: 360px;
+      height: auto;
+      margin-top: 8px;
+      padding: 7px;
+      background: #fff;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    select,
+    input,
+    button {
+      width: 100%;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+    }
+
+    select,
+    input { padding: 0 10px; }
+
+    button {
+      width: auto;
+      min-width: 88px;
+      padding: 0 14px;
+      border-color: var(--blue);
+      background: var(--blue);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .metric {
+      padding: 12px 14px;
+      border-right: 1px solid var(--line);
+    }
+
+    .metric:last-child { border-right: 0; }
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 3px;
+      font-size: 22px;
+    }
+
+    .table-wrap { overflow: auto; }
+
+    table {
+      width: 100%;
+      min-width: 800px;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: var(--head);
+      font-size: 13px;
+      z-index: 1;
+    }
+
+    tbody tr:hover { background: #f9fafb; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .tag {
+      display: inline-block;
+      min-width: 44px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .新增 { background: #fee2e2; color: var(--red); }
+    .增加 { background: #fee2e2; color: var(--red); }
+    .減少 { background: #dcfce7; color: var(--green); }
+    .刪除 { background: #e5e7eb; color: var(--gray); }
+
+    .empty {
+      padding: 28px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    @media (max-width: 720px) {
+      header { display: block; }
+      .source { margin-top: 6px; text-align: left; }
+      .toolbar,
+      .summary { grid-template-columns: 1fr; }
+      .metric { border-right: 0; border-bottom: 1px solid var(--line); }
+      .metric:last-child { border-bottom: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>00981A 每日異動</h1>
+      <div class="source" id="source">讀取每日異動紀錄.xlsx...</div>
+    </header>
+
+    <section class="toolbar">
+      <div>
+        <label for="dateFilter">日期</label>
+        <select id="dateFilter"></select>
+      </div>
+      <div>
+        <label for="statusFilter">異動狀況</label>
+        <select id="statusFilter">
+          <option value="">全部</option>
+          <option value="新增">新增</option>
+          <option value="增加">增加</option>
+          <option value="減少">減少</option>
+          <option value="刪除">刪除</option>
+        </select>
+      </div>
+      <div>
+        <label for="keywordFilter">搜尋</label>
+        <input id="keywordFilter" type="search" placeholder="股票代號或名稱">
+      </div>
+      <button id="reloadButton" type="button">重新讀取</button>
+    </section>
+
+    <section class="notice" id="localNotice">
+      直接開啟本機 HTML 時，瀏覽器會阻擋自動讀取旁邊的 Excel。發佈到 GitHub Pages 後會自動讀取；本機預覽可先手動選擇每日異動紀錄.xlsx。
+      <input id="fileInput" type="file" accept=".xlsx,.xls">
+    </section>
+
+    <section class="summary">
+      <div class="metric"><span>符合筆數</span><strong id="total">0</strong></div>
+      <div class="metric"><span>新增/增加</span><strong id="buy">0</strong></div>
+      <div class="metric"><span>減少/刪除</span><strong id="sell">0</strong></div>
+      <div class="metric"><span>權重淨變化</span><strong id="weight">0.00%</strong></div>
+    </section>
+
+    <section class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>日期</th>
+            <th>股票代號</th>
+            <th>股票名稱</th>
+            <th>異動狀況</th>
+            <th class="num">異動股數</th>
+            <th class="num">異動持股權重</th>
+          </tr>
+        </thead>
+        <tbody id="rows">
+          <tr><td class="empty" colspan="6">讀取中...</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <script>
+    const EXCEL_PATH = "每日異動紀錄.xlsx";
+    let allRows = [];
+
+    const source = document.querySelector("#source");
+    const dateFilter = document.querySelector("#dateFilter");
+    const statusFilter = document.querySelector("#statusFilter");
+    const keywordFilter = document.querySelector("#keywordFilter");
+    const reloadButton = document.querySelector("#reloadButton");
+    const localNotice = document.querySelector("#localNotice");
+    const fileInput = document.querySelector("#fileInput");
+    const rowsBody = document.querySelector("#rows");
+
+    function cleanDate(value) {
+      const text = String(value ?? "").trim().replace(/\.0$/, "");
+      return text;
+    }
+
+    function showDate(value) {
+      const text = cleanDate(value);
+      return /^\d{8}$/.test(text)
+        ? `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`
+        : text;
+    }
+
+    function toNumber(value) {
+      return Number(String(value ?? "0").replace(/,/g, "")) || 0;
+    }
+
+    function useWorkbookBuffer(buffer, fileName = EXCEL_PATH) {
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      allRows = rawRows
+        .map((row) => ({
+          date: cleanDate(row["日期"]),
+          code: String(row["股票代號"] ?? "").trim(),
+          name: String(row["股票名稱"] ?? "").trim(),
+          status: String(row["異動狀況"] ?? "").trim(),
+          shares: toNumber(row["異動股數"]),
+          weight: toNumber(row["異動持股權重"])
+        }))
+        .filter((row) => row.date && row.code);
+
+      setupDates();
+      render();
+      source.textContent = `已讀取 ${fileName}，共 ${allRows.length.toLocaleString("zh-TW")} 筆資料`;
+    }
+
+    async function loadWorkbook() {
+      source.textContent = "讀取每日異動紀錄.xlsx...";
+      rowsBody.innerHTML = `<tr><td class="empty" colspan="6">讀取中...</td></tr>`;
+
+      try {
+        const response = await fetch(`${EXCEL_PATH}?v=${Date.now()}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const buffer = await response.arrayBuffer();
+        localNotice.style.display = "none";
+        useWorkbookBuffer(buffer);
+      } catch (error) {
+        localNotice.style.display = location.protocol === "file:" ? "block" : "none";
+        source.textContent = location.protocol === "file:"
+          ? "本機直接開啟時無法自動讀取"
+          : "讀取失敗，請確認 Excel 與 index.html 放在同一層";
+        rowsBody.innerHTML = `<tr><td class="empty" colspan="6">無法讀取每日異動紀錄.xlsx</td></tr>`;
+      }
+    }
+
+    function setupDates() {
+      const dates = [...new Set(allRows.map((row) => row.date))].sort().reverse();
+      dateFilter.innerHTML = dates
+        .map((date) => `<option value="${escapeHtml(date)}">${showDate(date)}</option>`)
+        .join("");
+    }
+
+    function getFilteredRows() {
+      const date = dateFilter.value;
+      const status = statusFilter.value;
+      const keyword = keywordFilter.value.trim().toLowerCase();
+
+      return allRows.filter((row) => {
+        const text = `${row.code} ${row.name}`.toLowerCase();
+        return (!date || row.date === date)
+          && (!status || row.status === status)
+          && (!keyword || text.includes(keyword));
+      });
+    }
+
+    function render() {
+      const visibleRows = getFilteredRows();
+      updateSummary(visibleRows);
+
+      if (!visibleRows.length) {
+        rowsBody.innerHTML = `<tr><td class="empty" colspan="6">沒有符合條件的資料</td></tr>`;
+        return;
+      }
+
+      rowsBody.innerHTML = visibleRows.map((row) => `
+        <tr>
+          <td>${showDate(row.date)}</td>
+          <td>${escapeHtml(row.code)}</td>
+          <td>${escapeHtml(row.name)}</td>
+          <td><span class="tag ${escapeHtml(row.status)}">${escapeHtml(row.status)}</span></td>
+          <td class="num">${row.shares.toLocaleString("zh-TW")}</td>
+          <td class="num">${formatWeight(row.weight)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function updateSummary(visibleRows) {
+      const buyCount = visibleRows.filter((row) => row.status === "新增" || row.status === "增加").length;
+      const sellCount = visibleRows.filter((row) => row.status === "減少" || row.status === "刪除").length;
+      const netWeight = visibleRows.reduce((sum, row) => sum + row.weight, 0);
+
+      document.querySelector("#total").textContent = visibleRows.length.toLocaleString("zh-TW");
+      document.querySelector("#buy").textContent = buyCount.toLocaleString("zh-TW");
+      document.querySelector("#sell").textContent = sellCount.toLocaleString("zh-TW");
+      document.querySelector("#weight").textContent = formatWeight(netWeight);
+    }
+
+    function formatWeight(value) {
+      return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#039;"
+      }[char]));
+    }
+
+    dateFilter.addEventListener("change", render);
+    statusFilter.addEventListener("change", render);
+    keywordFilter.addEventListener("input", render);
+    reloadButton.addEventListener("click", loadWorkbook);
+    fileInput.addEventListener("change", async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const buffer = await file.arrayBuffer();
+      useWorkbookBuffer(buffer, file.name);
+    });
+    loadWorkbook();
+  </script>
+</body>
+</html>
