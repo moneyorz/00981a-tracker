@@ -2,8 +2,11 @@ name: Update 00981A data
 
 on:
   schedule:
-    # 20:00 Asia/Taipei = 12:00 UTC
-    - cron: "0 12 * * *"
+    # 20:17, 21:17, 22:17 Asia/Taipei = 12:17, 13:17, 14:17 UTC
+    # GitHub scheduled workflows can be delayed or dropped near the top of the hour.
+    - cron: "17 12 * * *"
+    - cron: "17 13 * * *"
+    - cron: "17 14 * * *"
   workflow_dispatch:
 
 permissions:
