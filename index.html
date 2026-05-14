@@ -57,6 +57,7 @@
 
     .toolbar,
     .summary,
+    .price-panel,
     .table-wrap {
       background: var(--panel);
       border: 1px solid var(--line);
@@ -152,6 +153,83 @@
       font-size: 22px;
     }
 
+    .price-panel {
+      display: none;
+      margin-bottom: 12px;
+      padding: 14px;
+    }
+
+    .price-panel.active { display: block; }
+
+    .price-head {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .price-title {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .price-meta,
+    .price-status {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .price-summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .price-stat {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+    }
+
+    .price-stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .price-stat strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 18px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .price-chart {
+      width: 100%;
+      height: 260px;
+      margin-top: 6px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    .price-chart text {
+      fill: var(--muted);
+      font-size: 11px;
+    }
+
+    .price-detail {
+      margin-top: 10px;
+      max-height: 220px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+
+    .price-detail table { min-width: 520px; }
+
     .table-wrap { overflow: auto; }
 
     table {
@@ -176,7 +254,9 @@
       z-index: 1;
     }
 
+    tbody tr[data-code] { cursor: pointer; }
     tbody tr:hover { background: #f9fafb; }
+    tbody tr.selected { background: #eff6ff; }
     .num { text-align: right; font-variant-numeric: tabular-nums; }
 
     .tag {
@@ -205,6 +285,8 @@
       .source { margin-top: 6px; text-align: left; }
       .toolbar,
       .summary { grid-template-columns: 1fr; }
+      .price-head { display: block; }
+      .price-summary { grid-template-columns: 1fr 1fr; }
       .metric { border-right: 0; border-bottom: 1px solid var(--line); }
       .metric:last-child { border-bottom: 0; }
     }
@@ -251,6 +333,33 @@
       <div class="metric"><span>權重淨變化</span><strong id="weight">0.00%</strong></div>
     </section>
 
+    <section class="price-panel" id="pricePanel">
+      <div class="price-head">
+        <div>
+          <h2 class="price-title" id="priceTitle">選擇一筆異動紀錄</h2>
+          <div class="price-meta" id="priceMeta">點選下方任一列，查看該股票後續最多 30 個交易日股價。</div>
+        </div>
+        <div class="price-status" id="priceStatus"></div>
+      </div>
+      <div class="price-summary" id="priceSummary"></div>
+      <svg class="price-chart" id="priceChart" viewBox="0 0 760 260" role="img" aria-label="股價走勢"></svg>
+      <div class="price-detail">
+        <table>
+          <thead>
+            <tr>
+              <th>交易日</th>
+              <th class="num">收盤價</th>
+              <th class="num">漲跌</th>
+              <th class="num">漲跌幅</th>
+            </tr>
+          </thead>
+          <tbody id="priceRows">
+            <tr><td class="empty" colspan="4">尚未選擇異動紀錄</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="table-wrap">
       <table>
         <thead>
@@ -272,7 +381,12 @@
 
   <script>
     const EXCEL_PATH = "每日異動紀錄.xlsx";
+    const PRICE_DAYS = 30;
+    const MARKET_TWSE = "twse";
+    const MARKET_TPEX = "tpex";
     let allRows = [];
+    let selectedRowKey = "";
+    const priceCache = new Map();
 
     const source = document.querySelector("#source");
     const dateFilter = document.querySelector("#dateFilter");
@@ -282,6 +396,13 @@
     const localNotice = document.querySelector("#localNotice");
     const fileInput = document.querySelector("#fileInput");
     const rowsBody = document.querySelector("#rows");
+    const pricePanel = document.querySelector("#pricePanel");
+    const priceTitle = document.querySelector("#priceTitle");
+    const priceMeta = document.querySelector("#priceMeta");
+    const priceStatus = document.querySelector("#priceStatus");
+    const priceSummary = document.querySelector("#priceSummary");
+    const priceChart = document.querySelector("#priceChart");
+    const priceRows = document.querySelector("#priceRows");
 
     function cleanDate(value) {
       const text = String(value ?? "").trim().replace(/\.0$/, "");
@@ -369,8 +490,10 @@
         return;
       }
 
-      rowsBody.innerHTML = visibleRows.map((row) => `
-        <tr>
+      rowsBody.innerHTML = visibleRows.map((row) => {
+        const key = rowKey(row);
+        return `
+        <tr data-key="${escapeHtml(key)}" data-date="${escapeHtml(row.date)}" data-code="${escapeHtml(row.code)}" data-name="${escapeHtml(row.name)}" class="${key === selectedRowKey ? "selected" : ""}" tabindex="0">
           <td>${showDate(row.date)}</td>
           <td>${escapeHtml(row.code)}</td>
           <td>${escapeHtml(row.name)}</td>
@@ -378,7 +501,8 @@
           <td class="num">${row.shares.toLocaleString("zh-TW")}</td>
           <td class="num">${formatWeight(row.weight)}</td>
         </tr>
-      `).join("");
+      `;
+      }).join("");
     }
 
     function updateSummary(visibleRows) {
@@ -406,10 +530,214 @@
       }[char]));
     }
 
+    function rowKey(row) {
+      return `${row.date}-${row.code}-${row.status}-${row.shares}-${row.weight}`;
+    }
+
+    function parseDate(value) {
+      const text = cleanDate(value);
+      if (!/^\d{8}$/.test(text)) return null;
+      return new Date(Number(text.slice(0, 4)), Number(text.slice(4, 6)) - 1, Number(text.slice(6, 8)));
+    }
+
+    function ymd(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}${month}${day}`;
+    }
+
+    function twDateToAD(value) {
+      const parts = String(value).trim().split("/");
+      if (parts.length !== 3) return "";
+      const year = Number(parts[0]) + 1911;
+      return `${year}${parts[1].padStart(2, "0")}${parts[2].padStart(2, "0")}`;
+    }
+
+    function parsePrice(value) {
+      return Number(String(value ?? "").replace(/,/g, ""));
+    }
+
+    function addMonths(date, count) {
+      return new Date(date.getFullYear(), date.getMonth() + count, 1);
+    }
+
+    function monthKey(date) {
+      return `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}`;
+    }
+
+    async function fetchTWSEMonth(code, date) {
+      const key = `${MARKET_TWSE}-${code}-${monthKey(date)}`;
+      if (priceCache.has(key)) return priceCache.get(key);
+
+      const url = `https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=${monthKey(date)}01&stockNo=${encodeURIComponent(code)}`;
+      const rows = fetch(url)
+        .then((response) => response.ok ? response.json() : null)
+        .then((data) => {
+          if (!data || !Array.isArray(data.data)) return [];
+          return data.data.map((row) => ({
+            date: twDateToAD(row[0]),
+            close: parsePrice(row[6])
+          })).filter((row) => row.date && Number.isFinite(row.close));
+        })
+        .catch(() => []);
+
+      priceCache.set(key, rows);
+      return rows;
+    }
+
+    async function fetchTPEXMonth(code, date) {
+      const key = `${MARKET_TPEX}-${code}-${monthKey(date)}`;
+      if (priceCache.has(key)) return priceCache.get(key);
+
+      const twYear = date.getFullYear() - 1911;
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const dateText = `${twYear}/${month}`;
+      const url = `https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_info/st43_result.php?l=zh-tw&d=${encodeURIComponent(dateText)}&stkno=${encodeURIComponent(code)}`;
+      const rows = fetch(url)
+        .then((response) => response.ok ? response.json() : null)
+        .then((data) => {
+          const rawRows = Array.isArray(data?.aaData) ? data.aaData : [];
+          return rawRows.map((row) => ({
+            date: twDateToAD(row[0]),
+            close: parsePrice(row[6])
+          })).filter((row) => row.date && Number.isFinite(row.close));
+        })
+        .catch(() => []);
+
+      priceCache.set(key, rows);
+      return rows;
+    }
+
+    async function fetchPriceBars(code, startDate) {
+      const months = [0, 1, 2, 3].map((offset) => addMonths(startDate, offset));
+      let bars = (await Promise.all(months.map((date) => fetchTWSEMonth(code, date)))).flat();
+
+      if (!bars.length) {
+        bars = (await Promise.all(months.map((date) => fetchTPEXMonth(code, date)))).flat();
+      }
+
+      const startYmd = ymd(startDate);
+      return bars
+        .filter((bar) => bar.date > startYmd)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(0, PRICE_DAYS);
+    }
+
+    async function showPriceForRecord(record) {
+      const startDate = parseDate(record.date);
+      if (!startDate) return;
+
+      selectedRowKey = record.key;
+      rowsBody.querySelectorAll("tr").forEach((row) => {
+        row.classList.toggle("selected", row.dataset.key === selectedRowKey);
+      });
+
+      pricePanel.classList.add("active");
+      priceTitle.textContent = `${record.code} ${record.name}`;
+      priceMeta.textContent = `異動日期 ${showDate(record.date)}，查看後續最多 ${PRICE_DAYS} 個交易日`;
+      priceStatus.textContent = "讀取股價中...";
+      priceSummary.innerHTML = "";
+      priceChart.innerHTML = "";
+      priceRows.innerHTML = `<tr><td class="empty" colspan="4">讀取股價中...</td></tr>`;
+
+      const bars = await fetchPriceBars(record.code, startDate);
+      renderPricePanel(record, bars);
+    }
+
+    function renderPricePanel(record, bars) {
+      if (!bars.length) {
+        priceStatus.textContent = "無後續資料";
+        priceSummary.innerHTML = "";
+        priceChart.innerHTML = "";
+        priceRows.innerHTML = `<tr><td class="empty" colspan="4">尚無後續股價資料</td></tr>`;
+        return;
+      }
+
+      const first = bars[0];
+      const last = bars[bars.length - 1];
+      const diff = last.close - first.close;
+      const pct = first.close ? (diff / first.close) * 100 : 0;
+      priceStatus.textContent = `已取得 ${bars.length} 個交易日`;
+      priceSummary.innerHTML = `
+        <div class="price-stat"><span>區間</span><strong>${showDate(first.date)} - ${showDate(last.date)}</strong></div>
+        <div class="price-stat"><span>第一日收盤</span><strong>${formatPrice(first.close)}</strong></div>
+        <div class="price-stat"><span>最後收盤</span><strong>${formatPrice(last.close)}</strong></div>
+        <div class="price-stat"><span>區間漲跌幅</span><strong>${formatPct(pct)}</strong></div>
+      `;
+      renderPriceChart(bars);
+      priceRows.innerHTML = bars.map((bar, index) => {
+        const prev = index === 0 ? first.close : bars[index - 1].close;
+        const dayDiff = bar.close - prev;
+        const dayPct = prev ? (dayDiff / prev) * 100 : 0;
+        return `
+          <tr>
+            <td>${showDate(bar.date)}</td>
+            <td class="num">${formatPrice(bar.close)}</td>
+            <td class="num">${formatSigned(dayDiff)}</td>
+            <td class="num">${formatPct(dayPct)}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function renderPriceChart(bars) {
+      const width = 760;
+      const height = 260;
+      const pad = { top: 18, right: 18, bottom: 34, left: 54 };
+      const values = bars.map((bar) => bar.close);
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const span = max - min || 1;
+      const x = (index) => pad.left + (bars.length === 1 ? 0 : index * (width - pad.left - pad.right) / (bars.length - 1));
+      const y = (value) => pad.top + (max - value) * (height - pad.top - pad.bottom) / span;
+      const points = bars.map((bar, index) => `${x(index)},${y(bar.close)}`).join(" ");
+      const firstLabel = showDate(bars[0].date).slice(5);
+      const lastLabel = showDate(bars[bars.length - 1].date).slice(5);
+
+      priceChart.innerHTML = `
+        <line x1="${pad.left}" y1="${height - pad.bottom}" x2="${width - pad.right}" y2="${height - pad.bottom}" stroke="#e5e7eb" />
+        <line x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${height - pad.bottom}" stroke="#e5e7eb" />
+        <text x="8" y="${y(max) + 4}">${formatPrice(max)}</text>
+        <text x="8" y="${y(min) + 4}">${formatPrice(min)}</text>
+        <text x="${pad.left}" y="${height - 10}">${firstLabel}</text>
+        <text x="${width - pad.right - 38}" y="${height - 10}">${lastLabel}</text>
+        <polyline fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="${points}" />
+        ${bars.map((bar, index) => `<circle cx="${x(index)}" cy="${y(bar.close)}" r="3" fill="#2563eb"><title>${showDate(bar.date)} ${formatPrice(bar.close)}</title></circle>`).join("")}
+      `;
+    }
+
+    function formatPrice(value) {
+      return Number(value).toLocaleString("zh-TW", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatSigned(value) {
+      return `${value > 0 ? "+" : ""}${formatPrice(value)}`;
+    }
+
+    function formatPct(value) {
+      return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
+    }
+
     dateFilter.addEventListener("change", render);
     statusFilter.addEventListener("change", render);
     keywordFilter.addEventListener("input", render);
     reloadButton.addEventListener("click", loadWorkbook);
+    rowsBody.addEventListener("click", (event) => {
+      const row = event.target.closest("tr[data-code]");
+      if (!row) return;
+      showPriceForRecord({
+        key: row.dataset.key,
+        date: row.dataset.date,
+        code: row.dataset.code,
+        name: row.dataset.name
+      });
+    });
+    rowsBody.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      const row = event.target.closest("tr[data-code]");
+      if (row) row.click();
+    });
     fileInput.addEventListener("change", async (event) => {
       const file = event.target.files[0];
       if (!file) return;
