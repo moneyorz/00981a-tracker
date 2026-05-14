@@ -618,10 +618,12 @@
       }
 
       const startYmd = ymd(startDate);
-      return bars
-        .filter((bar) => bar.date > startYmd)
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .slice(0, PRICE_DAYS);
+      const sortedBars = bars
+        .filter((bar) => bar.date >= startYmd)
+        .sort((a, b) => a.date.localeCompare(b.date));
+      const anchor = sortedBars.find((bar) => bar.date === startYmd);
+      const futureBars = sortedBars.filter((bar) => bar.date > startYmd).slice(0, PRICE_DAYS);
+      return anchor ? [anchor, ...futureBars] : futureBars;
     }
 
     async function showPriceForRecord(record) {
@@ -658,14 +660,15 @@
       const last = bars[bars.length - 1];
       const diff = last.close - first.close;
       const pct = first.close ? (diff / first.close) * 100 : 0;
-      priceStatus.textContent = `已取得 ${bars.length} 個交易日`;
+      const futureCount = bars.filter((bar) => bar.date > record.date).length;
+      priceStatus.textContent = `已取得 ${futureCount} 個後續交易日`;
       priceSummary.innerHTML = `
         <div class="price-stat"><span>區間</span><strong>${showDate(first.date)} - ${showDate(last.date)}</strong></div>
         <div class="price-stat"><span>第一日收盤</span><strong>${formatPrice(first.close)}</strong></div>
         <div class="price-stat"><span>最後收盤</span><strong>${formatPrice(last.close)}</strong></div>
         <div class="price-stat"><span>區間漲跌幅</span><strong>${formatPct(pct)}</strong></div>
       `;
-      renderPriceChart(bars);
+      renderPriceChart(bars, record.date);
       priceRows.innerHTML = bars.map((bar, index) => {
         const prev = index === 0 ? first.close : bars[index - 1].close;
         const dayDiff = bar.close - prev;
@@ -681,7 +684,7 @@
       }).join("");
     }
 
-    function renderPriceChart(bars) {
+    function renderPriceChart(bars, recordDate) {
       const width = 760;
       const height = 260;
       const pad = { top: 18, right: 18, bottom: 34, left: 54 };
@@ -703,7 +706,13 @@
         <text x="${pad.left}" y="${height - 10}">${firstLabel}</text>
         <text x="${width - pad.right - 38}" y="${height - 10}">${lastLabel}</text>
         <polyline fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="${points}" />
-        ${bars.map((bar, index) => `<circle cx="${x(index)}" cy="${y(bar.close)}" r="3" fill="#2563eb"><title>${showDate(bar.date)} ${formatPrice(bar.close)}</title></circle>`).join("")}
+        ${bars.map((bar, index) => {
+          const isRecordDate = bar.date === recordDate;
+          const fill = isRecordDate ? "#dc2626" : "#2563eb";
+          const radius = isRecordDate ? 5 : 3;
+          const label = isRecordDate ? "異動日" : "交易日";
+          return `<circle cx="${x(index)}" cy="${y(bar.close)}" r="${radius}" fill="${fill}"><title>${label} ${showDate(bar.date)} ${formatPrice(bar.close)}</title></circle>`;
+        }).join("")}
       `;
     }
 
