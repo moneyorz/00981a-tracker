@@ -2,11 +2,9 @@ name: Update 00981A data
 
 on:
   schedule:
-    # 20:17, 21:17, 22:17 Asia/Taipei = 12:17, 13:17, 14:17 UTC
-    # GitHub scheduled workflows can be delayed or dropped near the top of the hour.
-    - cron: "17 12 * * *"
-    - cron: "17 13 * * *"
-    - cron: "17 14 * * *"
+    # 20:05-23:50 Asia/Taipei, every 15 minutes = 12:05-15:50 UTC.
+    # GitHub scheduled workflows can be delayed or dropped, so retry during the update window.
+    - cron: "5,20,35,50 12-15 * * *"
   workflow_dispatch:
 
 permissions:
